@@ -237,11 +237,13 @@ export function highlight(state) {
 
 // MARK: Playback
 
+// Before the match start; after the previous tap, which comes once that rally is over.
 const LEAD = 1;
+const AFTER_TAP = 1;
 const TAIL = 2;
 
 function windowBetween(from, to, goLiveAt, nudge) {
-  const start = Math.max(0, from - goLiveAt - LEAD + nudge);
+  const start = Math.max(0, from - goLiveAt + nudge);
   // The end can't fall before the clamped start.
   const end = Math.max(start, to - goLiveAt + TAIL + nudge);
   return [start, end];
@@ -250,11 +252,11 @@ function windowBetween(from, to, goLiveAt, nudge) {
 /// [start, end] seconds into the video, or null for an index with no point.
 export function pointWindow(state, index, goLiveAt, nudgeSeconds) {
   if (!(index >= 0 && index < state.points.length)) return null;
-  const from = index === 0 ? state.setup.startedAt : state.points[index - 1].at;
+  const from = index === 0 ? state.setup.startedAt - LEAD : state.points[index - 1].at + AFTER_TAP;
   return windowBetween(from, state.points[index].at, goLiveAt, nudgeSeconds);
 }
 
 export function matchWindow(state, goLiveAt, nudgeSeconds) {
   if (!state.points.length) return null;
-  return windowBetween(state.setup.startedAt, state.points[state.points.length - 1].at, goLiveAt, nudgeSeconds);
+  return windowBetween(state.setup.startedAt - LEAD, state.points[state.points.length - 1].at, goLiveAt, nudgeSeconds);
 }
