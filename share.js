@@ -39,6 +39,30 @@ export function encodeFragment(payload) {
   return `m=${toBase64URL(canonicalJSON(payload))}`;
 }
 
+export function encodeCollectionFragment(payload) {
+  validateCollection(payload);
+  return `c=${toBase64URL(canonicalJSON(payload))}`;
+}
+
+export function decodeCollectionFragment(fragment) {
+  let text = String(fragment).trim().replace(/^#/, '');
+  if (!text.startsWith('c=') || text.length > 1000000) throw malformed('collection fragment');
+  let payload;
+  try { payload = JSON.parse(fromBase64URL(text.slice(2))); }
+  catch { throw malformed('collection JSON'); }
+  validateCollection(payload);
+  return payload;
+}
+
+function validateCollection(payload) {
+  if (!payload || payload.v !== 1 || typeof payload.t !== 'string'
+      || !Array.isArray(payload.m) || !payload.m.length || payload.m.length > 500) throw malformed('collection');
+  for (const match of payload.m) {
+    if (!match || match.v !== VERSION) throw malformed('collection match version');
+    validate(match);
+  }
+}
+
 function fromBase64URL(text) {
   // Chat apps wrap long links and some add padding; both are harmless. Accept the
   // standard alphabet too.

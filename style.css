@@ -34,6 +34,20 @@ body {
 
 h1, h2, p { margin: 0; }
 
+/* A collection keeps every game in the same page, with its own video and timing. */
+.collection { max-width: 520px; margin: 0 auto; padding-top: max(20px, env(safe-area-inset-top)); }
+.collection-top { padding: 12px 20px 22px; border-bottom: 1px solid var(--rule); }
+.collection-top h1 { font-size: clamp(26px, 6vw, 36px); font-weight: 800; margin-top: 8px; overflow-wrap: anywhere; }
+.collection-count { color: var(--dim); margin-top: 8px; }
+.collection-nav { margin: 18px 16px 0; padding: 16px; background: var(--card); border-radius: 16px; }
+.collection-nav label { display: block; font-size: 12px; color: var(--left); font-weight: 700; margin-bottom: 10px; }
+.collection-nav select { display: block; width: 100%; padding: 12px; border: 1px solid var(--sep); border-radius: 10px; background: var(--bg); color: var(--text); font: inherit; }
+.collection-buttons { display: flex; gap: 10px; margin-top: 12px; }
+.collection-buttons button { flex: 1; padding: 12px 8px; border: 0; border-radius: 10px; background: var(--sheet-head); color: var(--text); font: inherit; font-weight: 600; cursor: pointer; }
+.collection-buttons button:disabled { opacity: 0.35; cursor: default; }
+.collection-buttons button:not(:disabled):last-child { background: var(--left); color: var(--bg); }
+button:focus-visible, select:focus-visible, a:focus-visible { outline: 2px solid var(--left); outline-offset: 3px; }
+
 .top { margin: 4px 2px 14px; }
 .eyebrow { color: var(--dim); font-size: 12px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
 .top h1 { font-size: 24px; font-weight: 800; letter-spacing: -0.01em; margin-top: 2px; overflow-wrap: anywhere; }

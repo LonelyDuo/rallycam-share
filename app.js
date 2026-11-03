@@ -1,7 +1,7 @@
 // The share page: rebuilds a match from the link's fragment and shows it like the app's
 // match page. `renderMatch` is a pure payload -> HTML string function (so it is tested
 // without a DOM); everything below `boot` touches the page.
-import { decodeFragment, INCOMPLETE } from './share.js';
+import { decodeFragment, decodeCollectionFragment, INCOMPLETE } from './share.js';
 import {
   stateFromShare, analyse, scoresheetItems, isHighlight, teamName, resultLine,
   pointWindow, matchWindow, prefix,
@@ -49,7 +49,7 @@ export function renderIncomplete() {
   return `<main class="page"><section class="message" role="alert"><h1>RallyCam</h1><p>${esc(INCOMPLETE)}</p></section></main>`;
 }
 
-export function renderMatch(payload) {
+export function renderMatch(payload, { embedded = false } = {}) {
   const state = stateFromShare(payload);
   const analysis = analyse(state);
   const vid = validVideoID(payload.vid);
@@ -60,7 +60,7 @@ export function renderMatch(payload) {
 
   const date = prettyDate(payload.d);
   const parts = [
-    `<main class="page">`,
+    `<${embedded ? 'section' : 'main'} class="page">`,
     `<header class="top"><p class="eyebrow">RallyCam${date ? ` · ${esc(date)}` : ''}</p><h1>${esc(payload.t)}</h1></header>`,
     renderHero(state, analysis, hasVideo),
     hasVideo ? renderWatch(vid, windows.match) : `<p class="novideo">${esc(NO_VIDEO)}</p>`,
@@ -76,8 +76,24 @@ export function renderMatch(payload) {
       `<p class="key"><b>Initials</b> = who served that point${hasVideo ? ' · <b>▶</b> plays the rally' : ''} · <b>★</b> starred on the watch</p>`,
     );
   }
-  parts.push(`</main>`);
+  parts.push(`</${embedded ? 'section' : 'main'}>`);
   return parts.join('\n');
+}
+
+export function renderCollection(payload, index = 0) {
+  if (!Number.isInteger(index) || index < 0 || index >= payload.m.length) throw new RangeError('match index');
+  const options = payload.m.map((match, i) => {
+    const state = stateFromShare(match);
+    const label = `${i + 1}. ${prettyDate(match.d)} · ${teamName('left', state.setup)} ${state.score.left}–${state.score.right} ${teamName('right', state.setup)}`;
+    return `<option value="${i}"${index === i ? ' selected' : ''}>${esc(label)}</option>`;
+  }).join('');
+  return `<main class="collection"><header class="collection-top"><p class="eyebrow">RallyCam · Match collection</p>`
+    + `<h1>${esc(payload.t)}</h1><p class="collection-count">${payload.m.length} matches · one link</p></header>`
+    + `<nav class="collection-nav" aria-label="Browse matches"><label for="match-picker">Match ${index + 1} of ${payload.m.length}</label>`
+    + `<select id="match-picker">${options}</select><div class="collection-buttons">`
+    + `<button type="button" data-browse="${index - 1}"${index === 0 ? ' disabled' : ''}>← Previous match</button>`
+    + `<button type="button" data-browse="${index + 1}"${index === payload.m.length - 1 ? ' disabled' : ''}>Next match →</button></div></nav>`
+    + `<div id="collection-match" aria-live="polite">${renderMatch(payload.m[index], { embedded: true })}</div></main>`;
 }
 
 function renderHero(state, analysis, hasVideo) {
@@ -154,6 +170,14 @@ function renderTiles(state, analysis) {
     + tile('Biggest lead', both((side) => lead(analysis.biggestLead[side])))
     + tile('Won on own serve', `${serve('left')} <small>${esc(shortName('left', s))}</small>`)
     + tile('Won on own serve', `${serve('right')} <small>${esc(shortName('right', s))}</small>`)
+    + [['Won receiving', analysis.wonReceiving, true],
+       ['Game points saved', analysis.gamePointsSaved, false],
+       ['Game points converted', analysis.gamePointsConverted, false]].map(([label, stats, percentage]) =>
+      ['left', 'right'].map((side) => {
+        const stat = stats[side];
+        const value = stat.total > 0 ? `${stat.won}/${stat.total}${percentage ? ` · ${stat.percent}%` : ''}` : '–';
+        return tile(label, `${value} <small>${esc(shortName(side, s))}</small>`);
+      }).join('')).join('')
     + `</div>`;
 }
 
@@ -218,15 +242,31 @@ function renderRow(p, state, analysis, video, hl) {
 function boot() {
   const root = document.getElementById('app');
   let payload;
+  const collection = location.hash.replace(/^#/, '').startsWith('c=');
   try {
-    payload = decodeFragment(location.hash);
+    payload = collection ? decodeCollectionFragment(location.hash) : decodeFragment(location.hash);
   } catch {
     root.innerHTML = renderIncomplete();
     return;
   }
-  root.innerHTML = renderMatch(payload);
-  document.title = `${payload.t} · RallyCam`;
-  wire(root, validVideoID(payload.vid));
+  let dispose;
+  function show(index = 0) {
+    dispose?.();
+    root.innerHTML = collection ? renderCollection(payload, index) : renderMatch(payload);
+    const match = collection ? payload.m[index] : payload;
+    document.title = `${payload.t} · RallyCam`;
+    dispose = wire(collection ? root.querySelector('#collection-match') : root, validVideoID(match.vid));
+  }
+  show();
+  if (collection) {
+    root.addEventListener('click', (event) => {
+      const button = event.target.closest?.('[data-browse]');
+      if (button && !button.disabled) { show(Number(button.dataset.browse)); window.scrollTo({ top: 0, behavior: 'smooth' }); }
+    });
+    root.addEventListener('change', (event) => {
+      if (event.target.id === 'match-picker') show(Number(event.target.value));
+    });
+  }
   // A different link pasted into the same tab.
   window.addEventListener('hashchange', () => location.reload());
 }
@@ -243,11 +283,11 @@ function wire(root, vid) {
   if (!vid || !wrap) return;
   const note = root.querySelector('#player-note');
   const frameHolder = root.querySelector('#player-frame');
-  const ready = loadYouTubeAPI();
   let player = null;
   let playerReady = false;
   let pending = null;
   let activeRow = null;
+  let disposed = false;
 
   function showNote(text) {
     note.textContent = text;
@@ -272,7 +312,8 @@ function wire(root, vid) {
     // The page sends no referrer, but YouTube refuses to embed without at least the origin.
     iframe.referrerPolicy = 'strict-origin-when-cross-origin';
     frameHolder.replaceChildren(iframe);
-    ready.then((YT) => {
+    loadYouTubeAPI().then((YT) => {
+      if (disposed) return;
       player = new YT.Player(iframe, {
         events: {
           onReady: () => {
@@ -313,12 +354,15 @@ function wire(root, vid) {
     const el = e.target.closest?.('.row[data-play]');
     if (el) { e.preventDefault(); play(el); }
   });
+  return () => { disposed = true; player?.destroy?.(); };
 }
 
 /// Resolves with `YT` once the IFrame API is ready. The only script this page loads.
+let youtubeAPIPromise;
 function loadYouTubeAPI() {
-  return new Promise((resolve, reject) => {
-    if (window.YT?.Player) return resolve(window.YT);
+  if (window.YT?.Player) return Promise.resolve(window.YT);
+  if (youtubeAPIPromise) return youtubeAPIPromise;
+  youtubeAPIPromise = new Promise((resolve, reject) => {
     const previous = window.onYouTubeIframeAPIReady;
     window.onYouTubeIframeAPIReady = () => { previous?.(); resolve(window.YT); };
     const script = document.createElement('script');
@@ -326,7 +370,8 @@ function loadYouTubeAPI() {
     script.async = true;
     script.onerror = () => reject(new Error('YouTube API failed to load'));
     document.head.append(script);
-  });
+  }).catch((error) => { youtubeAPIPromise = null; throw error; });
+  return youtubeAPIPromise;
 }
 
 if (typeof document !== 'undefined') boot();
