@@ -1,11 +1,12 @@
 // The share page: rebuilds a match from the link's fragment and shows it like the app's
 // match page. `renderMatch` is a pure payload -> HTML string function (so it is tested
 // without a DOM); everything below `boot` touches the page.
-import { decodeFragment, decodeCollectionFragment, validateCollection, INCOMPLETE } from './share.js?v=short-links-4';
+import { decodeFragment, decodeCollectionFragment, validateCollection, INCOMPLETE } from './share.js?v=collection-stats-5';
 import {
   stateFromShare, analyse, scoresheetItems, isHighlight, teamName, resultLine,
   pointWindow, matchWindow, prefix,
-} from './rules.js?v=short-links-4';
+  collectionStats, collectionOpponents,
+} from './rules.js?v=collection-stats-5';
 
 const LEFT = '#FFD23F';
 const RIGHT = '#5AA9FF';
@@ -80,7 +81,34 @@ export function renderMatch(payload, { embedded = false } = {}) {
   return parts.join('\n');
 }
 
-export function renderCollection(payload, index = 0) {
+export function renderCollectionStats(payload, selectedKey = null) {
+  const stats = collectionStats(payload.m);
+  const focusedName = payload.t?.match(/^(.+)[’']s (?:matches|games)$/i)?.[1];
+  const selected = stats.players.find(player => player.key === selectedKey)
+    ?? stats.players.find(player => focusedName && player.name.localeCompare(focusedName, 'en', {sensitivity:'base'}) === 0)
+    ?? stats.players[0];
+  const percent = rate => rate === null ? '—' : `${Math.round(rate * 100)}%`;
+  const records = stats.players.map(player => `<button type="button" class="record-row" data-stat-player="${esc(player.key)}"`
+    + ` aria-pressed="${player.key === selected?.key}"><span class="record-name">${esc(player.name)}</span>`
+    + `<span>${player.wins}–${player.losses}</span><b>${percent(player.winRate)}</b></button>`).join('');
+  const opponents = selected ? collectionOpponents(stats, selected.key).map(opponent =>
+    `<article class="faceoff"><div class="faceoff-title"><span>vs ${esc(opponent.name)}</span>`
+    + `<strong aria-label="${esc(selected.name)} ${opponent.wins} wins, ${esc(opponent.name)} ${opponent.losses} wins">${opponent.wins}<span>–</span>${opponent.losses}</strong></div>`
+    + `<div class="faceoff-meta"><span>${percent(opponent.winRate)} win rate · ${opponent.wins + opponent.losses} completed`
+    + `${opponent.unfinished ? ` · ${opponent.unfinished} unfinished` : ''}</span>`
+    + `<span>${opponent.hasDoubles ? 'Team points' : 'Points'} ${opponent.pointsFor}–${opponent.pointsAgainst}</span></div></article>`
+  ).join('') : '';
+  return `<section class="collection-stats" id="collection-stats" aria-label="Selected match statistics"><details open>`
+    + `<summary><span>Collection stats</span><span>${stats.completed} completed · ${stats.unfinished} unfinished <span class="picker-chevron" aria-hidden="true">⌄</span></span></summary>`
+    + `<div class="collection-stats-body"><p class="stats-scope">Only the games in this collection</p>`
+    + (stats.players.length ? `<div class="record-heading"><span>Player · tap to compare</span><span>W–L</span><span>Win rate</span></div>`
+      + `<div class="record-list">${records}</div><h3>${esc(selected.name)} <span>head-to-head</span></h3>`
+      + `<p class="faceoff-key">Game wins: ${esc(selected.name)} – opponent</p><div class="faceoff-list">${opponents || '<p class="stats-scope">No named opponents in these games.</p>'}</div>`
+      : `<p class="stats-scope">Add player names to compare results.</p>`)
+    + `<p class="stats-footnote">Win rates use completed games only. Doubles use team results. Point totals include unfinished games.</p></div></details></section>`;
+}
+
+export function renderCollection(payload, index = 0, selectedPlayer = null) {
   if (!Number.isInteger(index) || index < 0 || index >= payload.m.length) throw new RangeError('match index');
   function matchRows(match) {
     const state = stateFromShare(match);
@@ -98,7 +126,8 @@ export function renderCollection(payload, index = 0) {
       + `<span class="picker-teams">${matchRows(match)}</span></span></button>`;
   }).join('');
   return `<main class="collection"><header class="collection-top"><p class="eyebrow">RallyCam · Match collection</p>`
-    + `<h1>${esc(payload.t)}</h1><p class="collection-count">${payload.m.length} matches · one link</p></header>`
+    + `<h1>${esc(payload.t)}</h1><p class="collection-count">${payload.m.length} match${payload.m.length === 1 ? '' : 'es'} · one link</p></header>`
+    + renderCollectionStats(payload, selectedPlayer)
     + `<nav class="collection-nav" aria-label="Browse matches"><details class="match-picker" id="match-picker">`
     + `<summary><span class="picker-current"><span class="picker-current-meta"><span>Match ${index + 1} of ${payload.m.length}</span>`
     + `<span class="picker-change">Change match <span class="picker-chevron" aria-hidden="true">⌄</span></span></span>`
@@ -280,9 +309,10 @@ async function boot() {
     return;
   }
   let dispose;
+  let selectedStatsPlayer = null;
   function show(index = 0) {
     dispose?.();
-    root.innerHTML = collection ? renderCollection(payload, index) : renderMatch(payload);
+    root.innerHTML = collection ? renderCollection(payload, index, selectedStatsPlayer) : renderMatch(payload);
     const match = collection ? payload.m[index] : payload;
     document.title = `${payload.t} · RallyCam`;
     dispose = wire(collection ? root.querySelector('#collection-match') : root, validVideoID(match.vid));
@@ -290,6 +320,13 @@ async function boot() {
   show();
   if (collection) {
     root.addEventListener('click', (event) => {
+      const player = event.target.closest?.('[data-stat-player]');
+      if (player) {
+        selectedStatsPlayer = player.dataset.statPlayer;
+        root.querySelector('#collection-stats').outerHTML = renderCollectionStats(payload, selectedStatsPlayer);
+        Array.from(root.querySelectorAll('[data-stat-player]')).find(button => button.dataset.statPlayer === selectedStatsPlayer)?.focus({ preventScroll: true });
+        return;
+      }
       const button = event.target.closest?.('[data-browse]');
       if (button && !button.disabled) {
         if (button.hasAttribute('aria-current')) {

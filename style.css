@@ -39,6 +39,33 @@ h1, h2, p { margin: 0; }
 .collection-top { padding: 12px 20px 22px; border-bottom: 1px solid var(--rule); }
 .collection-top h1 { font-size: clamp(26px, 6vw, 36px); font-weight: 800; margin-top: 8px; overflow-wrap: anywhere; }
 .collection-count { color: var(--dim); margin-top: 8px; }
+.collection-stats { margin: 18px 16px 0; background: var(--card); border: 1px solid var(--sep); border-radius: 18px; }
+.collection-stats summary { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 16px; cursor: pointer; list-style: none; font-weight: 700; }
+.collection-stats summary::-webkit-details-marker { display: none; }
+.collection-stats summary > span:last-child { color: var(--dim); font-size: 10px; font-weight: 500; }
+.collection-stats details[open] > summary .picker-chevron { transform: rotate(180deg); }
+.collection-stats-body { padding: 0 14px 16px; border-top: 1px solid var(--sep); }
+.stats-scope { color: var(--dim); font-size: 11px; margin: 12px 0; }
+.record-heading, .record-row { display: grid; grid-template-columns: minmax(0,1fr) 52px 65px; align-items: center; gap: 8px; text-align: right; }
+.record-heading { padding: 8px 10px; color: var(--dim); font-size: 10px; }
+.record-heading > span:first-child { text-align: left; }
+.record-list { max-height: 230px; overflow-y: auto; display: grid; gap: 4px; }
+.record-row { width: 100%; border: 1px solid transparent; background: transparent; color: var(--text); border-radius: 10px; padding: 12px 10px; font: inherit; font-size: 13px; cursor: pointer; font-variant-numeric: tabular-nums; }
+.record-row:hover { background: rgba(255,255,255,0.04); }
+.record-row[aria-pressed="true"] { background: rgba(255,210,63,0.07); border-color: rgba(255,210,63,0.25); }
+.record-row[aria-pressed="true"] b { color: var(--left); }
+.record-name { text-align: left; font-weight: 600; overflow-wrap: anywhere; }
+.collection-stats h3 { margin: 22px 2px 4px; font-size: 15px; overflow-wrap: anywhere; }
+.collection-stats h3 span { color: var(--dim); font-weight: 500; }
+.faceoff-key { color: var(--dim); font-size: 10px; margin: 0 2px 12px; }
+.faceoff-list { max-height: 300px; overflow-y: auto; display: grid; gap: 8px; }
+.faceoff { padding: 12px; border-radius: 12px; background: var(--bg); }
+.faceoff-title { display: flex; justify-content: space-between; align-items: center; gap: 16px; font-size: 13px; font-weight: 600; }
+.faceoff-title > span { overflow-wrap: anywhere; }
+.faceoff-title strong { font-size: 24px; color: var(--left); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.faceoff-title strong > span { color: var(--dim); padding: 0 3px; }
+.faceoff-meta { display: grid; gap: 4px; margin-top: 7px; color: var(--dim); font-size: 10px; }
+.stats-footnote { color: var(--dim); font-size: 10px; line-height: 1.6; margin: 14px 2px 0; }
 .collection-nav { margin: 18px 16px 0; }
 .match-picker { background: var(--card); border: 1px solid var(--sep); border-radius: 18px; overflow: clip; }
 .match-picker summary { padding: 18px; cursor: pointer; list-style: none; }

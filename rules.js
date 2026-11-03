@@ -9,6 +9,76 @@ const other = (side) => (side === 'left' ? 'right' : 'left');
 const POINTS_TO_WIN = 11;
 const WIN_BY = 2;
 
+// Collection records are based only on selected games. Each doubles partner gets
+// the team's result; only people on opposite sides are head-to-head opponents.
+export function collectionStats(matches) {
+  const players = new Map();
+  const pairs = new Map();
+  const nameKey = name => name.trim().replace(/\s+/g, ' ').normalize('NFD').replace(/\p{M}/gu, '').toLocaleLowerCase('en-US');
+  let completed = 0;
+  for (const match of matches) {
+    const state = stateFromShare(match);
+    const sides = ['left', 'right'].map(side => {
+      const entries = new Map();
+      for (const player of state.setup[side].players) {
+        const name = player.name.trim().replace(/\s+/g, ' ');
+        const key = nameKey(name);
+        if (key) entries.set(key, name);
+      }
+      return entries;
+    });
+    // An ambiguous name on both teams cannot be credited with both a win and loss.
+    for (const key of [...sides[0].keys()]) {
+      if (sides[1].has(key)) { sides[0].delete(key); sides[1].delete(key); }
+    }
+    if (state.winner) completed += 1;
+    for (const [index, side] of ['left', 'right'].entries()) {
+      for (const [key, name] of sides[index]) {
+        const record = players.get(key) ?? { key, name, wins: 0, losses: 0, unfinished: 0, pointsFor: 0, pointsAgainst: 0 };
+        record.name = name;
+        if (!state.winner) record.unfinished += 1;
+        else if (state.winner === side) record.wins += 1;
+        else record.losses += 1;
+        record.pointsFor += state.score[side];
+        record.pointsAgainst += state.score[other(side)];
+        players.set(key, record);
+      }
+    }
+    for (const left of sides[0].keys()) for (const right of sides[1].keys()) {
+      const [a, b] = [left, right].sort();
+      const key = JSON.stringify([a, b]);
+      const pair = pairs.get(key) ?? { a, b, aWins: 0, bWins: 0, unfinished: 0, aPoints: 0, bPoints: 0, hasDoubles: false };
+      const aSide = a === left ? 'left' : 'right';
+      if (!state.winner) pair.unfinished += 1;
+      else if (state.winner === aSide) pair.aWins += 1;
+      else pair.bWins += 1;
+      pair.aPoints += state.score[aSide];
+      pair.bPoints += state.score[other(aSide)];
+      pair.hasDoubles ||= state.setup.format === 'doubles';
+      pairs.set(key, pair);
+    }
+  }
+  const records = [...players.values()].map(player => ({ ...player,
+    played: player.wins + player.losses + player.unfinished,
+    winRate: player.wins + player.losses ? player.wins / (player.wins + player.losses) : null,
+  })).sort((a, b) => b.played - a.played || b.wins - a.wins || a.key.localeCompare(b.key, 'en'));
+  return { total: matches.length, completed, unfinished: matches.length - completed, players: records, faceoffs: [...pairs.values()] };
+}
+
+export function collectionOpponents(stats, playerKey) {
+  const names = new Map(stats.players.map(player => [player.key, player.name]));
+  return stats.faceoffs.filter(pair => pair.a === playerKey || pair.b === playerKey).map(pair => {
+    const first = pair.a === playerKey;
+    const wins = first ? pair.aWins : pair.bWins;
+    const losses = first ? pair.bWins : pair.aWins;
+    const key = first ? pair.b : pair.a;
+    return { key, name: names.get(key), wins, losses, unfinished: pair.unfinished,
+      played: wins + losses + pair.unfinished, winRate: wins + losses ? wins / (wins + losses) : null,
+      pointsFor: first ? pair.aPoints : pair.bPoints, pointsAgainst: first ? pair.bPoints : pair.aPoints,
+      hasDoubles: pair.hasDoubles };
+  }).sort((a, b) => b.played - a.played || a.key.localeCompare(b.key, 'en'));
+}
+
 function scoreWinner(score) {
   for (const side of ['left', 'right']) {
     if (score[side] >= POINTS_TO_WIN && score[side] - score[other(side)] >= WIN_BY) return side;
