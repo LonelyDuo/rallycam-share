@@ -1,11 +1,11 @@
 // The share page: rebuilds a match from the link's fragment and shows it like the app's
 // match page. `renderMatch` is a pure payload -> HTML string function (so it is tested
 // without a DOM); everything below `boot` touches the page.
-import { decodeFragment, decodeCollectionFragment, INCOMPLETE } from './share.js?v=collections-2';
+import { decodeFragment, decodeCollectionFragment, INCOMPLETE } from './share.js?v=match-picker-3';
 import {
   stateFromShare, analyse, scoresheetItems, isHighlight, teamName, resultLine,
   pointWindow, matchWindow, prefix,
-} from './rules.js?v=collections-2';
+} from './rules.js?v=match-picker-3';
 
 const LEFT = '#FFD23F';
 const RIGHT = '#5AA9FF';
@@ -82,15 +82,29 @@ export function renderMatch(payload, { embedded = false } = {}) {
 
 export function renderCollection(payload, index = 0) {
   if (!Number.isInteger(index) || index < 0 || index >= payload.m.length) throw new RangeError('match index');
-  const options = payload.m.map((match, i) => {
+  function matchRows(match) {
     const state = stateFromShare(match);
-    const label = `${i + 1}. ${prettyDate(match.d)} · ${teamName('left', state.setup)} ${state.score.left}–${state.score.right} ${teamName('right', state.setup)}`;
-    return `<option value="${i}"${index === i ? ' selected' : ''}>${esc(label)}</option>`;
+    return ['left', 'right'].map((side) => `<span class="picker-team${state.winner === side ? ' is-winner' : ''}">`
+      + `<span>${esc(teamName(side, state.setup))}</span><b>${state.score[side]}</b></span>`).join('');
+  }
+  const choices = payload.m.map((match, i) => {
+    const state = stateFromShare(match);
+    const selected = index === i;
+    const label = `Match ${i + 1}, ${teamName('left', state.setup)} ${state.score.left}–${state.score.right} ${teamName('right', state.setup)}`;
+    return `<button class="picker-choice${selected ? ' is-selected' : ''}" type="button" data-browse="${i}"`
+      + `${selected ? ' aria-current="true"' : ''} aria-label="${esc(label)}">`
+      + `<span class="picker-number">${selected ? '✓' : i + 1}</span><span class="picker-choice-content">`
+      + `<span class="picker-choice-meta">Match ${i + 1} · ${esc(prettyDate(match.d))}<span>${selected ? 'Selected' : validVideoID(match.vid) ? 'Video' : 'Stats only'}</span></span>`
+      + `<span class="picker-teams">${matchRows(match)}</span></span></button>`;
   }).join('');
   return `<main class="collection"><header class="collection-top"><p class="eyebrow">RallyCam · Match collection</p>`
     + `<h1>${esc(payload.t)}</h1><p class="collection-count">${payload.m.length} matches · one link</p></header>`
-    + `<nav class="collection-nav" aria-label="Browse matches"><label for="match-picker">Match ${index + 1} of ${payload.m.length}</label>`
-    + `<select id="match-picker">${options}</select><div class="collection-buttons">`
+    + `<nav class="collection-nav" aria-label="Browse matches"><details class="match-picker" id="match-picker">`
+    + `<summary><span class="picker-current"><span class="picker-current-meta"><span>Match ${index + 1} of ${payload.m.length}</span>`
+    + `<span class="picker-change">Change match <span class="picker-chevron" aria-hidden="true">⌄</span></span></span>`
+    + `<span class="picker-teams">${matchRows(payload.m[index])}</span></span></summary>`
+    + `<div class="picker-panel"><p class="picker-panel-title">Choose a game</p><div class="picker-list">${choices}</div></div></details>`
+    + `<div class="collection-buttons">`
     + `<button type="button" data-browse="${index - 1}"${index === 0 ? ' disabled' : ''}>← Previous match</button>`
     + `<button type="button" data-browse="${index + 1}"${index === payload.m.length - 1 ? ' disabled' : ''}>Next match →</button></div></nav>`
     + `<div id="collection-match" aria-live="polite">${renderMatch(payload.m[index], { embedded: true })}</div></main>`;
@@ -261,10 +275,15 @@ function boot() {
   if (collection) {
     root.addEventListener('click', (event) => {
       const button = event.target.closest?.('[data-browse]');
-      if (button && !button.disabled) { show(Number(button.dataset.browse)); window.scrollTo({ top: 0, behavior: 'smooth' }); }
-    });
-    root.addEventListener('change', (event) => {
-      if (event.target.id === 'match-picker') show(Number(event.target.value));
+      if (button && !button.disabled) {
+        if (button.hasAttribute('aria-current')) {
+          root.querySelector('#match-picker').open = false;
+        } else {
+          show(Number(button.dataset.browse));
+          window.scrollTo({ top: 0, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
+        }
+        root.querySelector('#match-picker summary').focus({ preventScroll: true });
+      }
     });
   }
   // A different link pasted into the same tab.
