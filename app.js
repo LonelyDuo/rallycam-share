@@ -1,12 +1,12 @@
 // The share page: rebuilds a match from the link's fragment and shows it like the app's
 // match page. `renderMatch` is a pure payload -> HTML string function (so it is tested
 // without a DOM); everything below `boot` touches the page.
-import { decodeFragment, decodeCollectionFragment, validateCollection, INCOMPLETE } from './share.js?v=collection-stats-5';
+import { decodeFragment, decodeCollectionFragment, validateCollection, INCOMPLETE } from './share.js?v=collection-stats-6';
 import {
   stateFromShare, analyse, scoresheetItems, isHighlight, teamName, resultLine,
   pointWindow, matchWindow, prefix,
   collectionStats, collectionOpponents,
-} from './rules.js?v=collection-stats-5';
+} from './rules.js?v=collection-stats-6';
 
 const LEFT = '#FFD23F';
 const RIGHT = '#5AA9FF';
@@ -94,18 +94,18 @@ export function renderCollectionStats(payload, selectedKey = null) {
   const opponents = selected ? collectionOpponents(stats, selected.key).map(opponent =>
     `<article class="faceoff"><div class="faceoff-title"><span>vs ${esc(opponent.name)}</span>`
     + `<strong aria-label="${esc(selected.name)} ${opponent.wins} wins, ${esc(opponent.name)} ${opponent.losses} wins">${opponent.wins}<span>–</span>${opponent.losses}</strong></div>`
-    + `<div class="faceoff-meta"><span>${percent(opponent.winRate)} win rate · ${opponent.wins + opponent.losses} completed`
-    + `${opponent.unfinished ? ` · ${opponent.unfinished} unfinished` : ''}</span>`
+    + `<div class="faceoff-meta"><span>${percent(opponent.winRate)} win rate · ${opponent.wins + opponent.losses} decided`
+    + `${opponent.unfinished ? ` · ${opponent.unfinished} undecided` : ''}</span>`
     + `<span>${opponent.hasDoubles ? 'Team points' : 'Points'} ${opponent.pointsFor}–${opponent.pointsAgainst}</span></div></article>`
   ).join('') : '';
   return `<section class="collection-stats" id="collection-stats" aria-label="Selected match statistics"><details open>`
-    + `<summary><span>Collection stats</span><span>${stats.completed} completed · ${stats.unfinished} unfinished <span class="picker-chevron" aria-hidden="true">⌄</span></span></summary>`
+    + `<summary><span>Collection stats</span><span>${stats.total} games · ${stats.earlyEnded} ended early <span class="picker-chevron" aria-hidden="true">⌄</span></span></summary>`
     + `<div class="collection-stats-body"><p class="stats-scope">Only the games in this collection</p>`
     + (stats.players.length ? `<div class="record-heading"><span>Player · tap to compare</span><span>W–L</span><span>Win rate</span></div>`
       + `<div class="record-list">${records}</div><h3>${esc(selected.name)} <span>head-to-head</span></h3>`
       + `<p class="faceoff-key">Game wins: ${esc(selected.name)} – opponent</p><div class="faceoff-list">${opponents || '<p class="stats-scope">No named opponents in these games.</p>'}</div>`
       : `<p class="stats-scope">Add player names to compare results.</p>`)
-    + `<p class="stats-footnote">Win rates use completed games only. Doubles use team results. Point totals include unfinished games.</p></div></details></section>`;
+    + `<p class="stats-footnote">Early-ended games count as a win for the side ahead when play stopped. Tied endings and games still in progress are excluded from win rates. Doubles use team results. Point totals include all games.</p></div></details></section>`;
 }
 
 export function renderCollection(payload, index = 0, selectedPlayer = null) {
