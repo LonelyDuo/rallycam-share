@@ -1,11 +1,11 @@
 // The share page: rebuilds a match from the link's fragment and shows it like the app's
 // match page. `renderMatch` is a pure payload -> HTML string function (so it is tested
 // without a DOM); everything below `boot` touches the page.
-import { decodeFragment, decodeCollectionFragment, INCOMPLETE } from './share.js';
+import { decodeFragment, decodeCollectionFragment, INCOMPLETE } from './share.js?v=collections-2';
 import {
   stateFromShare, analyse, scoresheetItems, isHighlight, teamName, resultLine,
   pointWindow, matchWindow, prefix,
-} from './rules.js';
+} from './rules.js?v=collections-2';
 
 const LEFT = '#FFD23F';
 const RIGHT = '#5AA9FF';

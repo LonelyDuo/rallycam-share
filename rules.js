@@ -145,6 +145,31 @@ export function analyse(state) {
   const percent = (side) => (served[side] > 0 ? Math.round((100 * won[side]) / served[side]) : null);
   const wonOnServePercent = { left: percent('left'), right: percent('right') };
 
+  const emptyStats = () => ({ left: { won: 0, total: 0 }, right: { won: 0, total: 0 } });
+  const wonReceiving = emptyStats();
+  const gamePointsSaved = emptyStats();
+  const gamePointsConverted = emptyStats();
+  let scoreBefore = { left: 0, right: 0 };
+  points.forEach((p, i) => {
+    const receiver = servers[i].server.side === 'left' ? 'right' : 'left';
+    wonReceiving[receiver].total += 1;
+    if (p.winner === receiver) wonReceiving[receiver].won += 1;
+    const side = gamePointSide(scoreBefore);
+    if (side) {
+      const opponent = side === 'left' ? 'right' : 'left';
+      gamePointsConverted[side].total += 1;
+      gamePointsSaved[opponent].total += 1;
+      if (p.winner === side) gamePointsConverted[side].won += 1;
+      else gamePointsSaved[opponent].won += 1;
+    }
+    scoreBefore = p.scoreAfter;
+  });
+  for (const stats of [wonReceiving, gamePointsSaved, gamePointsConverted]) {
+    for (const stat of Object.values(stats)) {
+      stat.percent = stat.total > 0 ? Math.round(100 * stat.won / stat.total) : null;
+    }
+  }
+
   const reachedDeuce = points.some((p) => p.scoreAfter.left >= 10 && p.scoreAfter.right >= 10);
 
   const gamePointStarts = [];
@@ -155,7 +180,7 @@ export function analyse(state) {
 
   const duration = points.length >= 2 ? points[points.length - 1].at - points[0].at : null;
 
-  return { runs, leads, servers, longestRun, biggestLead, wonOnServePercent, reachedDeuce, gamePointStarts, duration };
+  return { runs, leads, servers, longestRun, biggestLead, wonOnServePercent, wonReceiving, gamePointsSaved, gamePointsConverted, reachedDeuce, gamePointStarts, duration };
 }
 
 // MARK: Names, scoresheet, summary
