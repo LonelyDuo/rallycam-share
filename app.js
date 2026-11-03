@@ -1,11 +1,11 @@
 // The share page: rebuilds a match from the link's fragment and shows it like the app's
 // match page. `renderMatch` is a pure payload -> HTML string function (so it is tested
 // without a DOM); everything below `boot` touches the page.
-import { decodeFragment, decodeCollectionFragment, INCOMPLETE } from './share.js?v=match-picker-3';
+import { decodeFragment, decodeCollectionFragment, validateCollection, INCOMPLETE } from './share.js?v=short-links-4';
 import {
   stateFromShare, analyse, scoresheetItems, isHighlight, teamName, resultLine,
   pointWindow, matchWindow, prefix,
-} from './rules.js?v=match-picker-3';
+} from './rules.js?v=short-links-4';
 
 const LEFT = '#FFD23F';
 const RIGHT = '#5AA9FF';
@@ -253,14 +253,30 @@ function renderRow(p, state, analysis, video, hl) {
 
 // MARK: Page
 
-function boot() {
+export const SHARE_STORAGE = 'https://rallycam-share-storage.richardisbluehd.chatgpt.site';
+
+export async function loadStoredCollection(id, request = fetch) {
+  if (!/^[A-Za-z0-9_-]{22}$/.test(id)) throw new Error('Invalid collection link.');
+  const response = await request(`${SHARE_STORAGE}/api/collections/${id}`, { credentials: 'omit', cache: 'no-store' });
+  if (!response.ok) throw new Error(response.status === 404 ? 'This collection is unavailable.' : "Couldn't load this collection. Please try again.");
+  const payload = await response.json();
+  validateCollection(payload);
+  return payload;
+}
+
+async function boot() {
   const root = document.getElementById('app');
   let payload;
-  const collection = location.hash.replace(/^#/, '').startsWith('c=');
+  const storedID = new URLSearchParams(location.search).get('c');
+  const collection = storedID !== null || location.hash.replace(/^#/, '').startsWith('c=');
   try {
-    payload = collection ? decodeCollectionFragment(location.hash) : decodeFragment(location.hash);
-  } catch {
-    root.innerHTML = renderIncomplete();
+    payload = storedID !== null ? await loadStoredCollection(storedID)
+      : collection ? decodeCollectionFragment(location.hash) : decodeFragment(location.hash);
+  } catch (error) {
+    root.innerHTML = storedID !== null
+      ? `<main class="page"><section class="message" role="alert"><h1>RallyCam</h1><p>${esc(error.message)}</p><button class="btn" id="retry-share" type="button">Try again</button></section></main>`
+      : renderIncomplete();
+    root.querySelector('#retry-share')?.addEventListener('click', () => location.reload());
     return;
   }
   let dispose;

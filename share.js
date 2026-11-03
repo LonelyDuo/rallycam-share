@@ -54,7 +54,7 @@ export function decodeCollectionFragment(fragment) {
   return payload;
 }
 
-function validateCollection(payload) {
+export function validateCollection(payload) {
   if (!payload || payload.v !== 1 || typeof payload.t !== 'string'
       || !Array.isArray(payload.m) || !payload.m.length || payload.m.length > 500) throw malformed('collection');
   for (const match of payload.m) {
