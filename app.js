@@ -339,7 +339,8 @@ async function boot() {
     if (chosen) {
       const panel = collection ? root.querySelector('#collection-match') : root;
       panel.querySelectorAll('.row[id^="point-"]').forEach(row => { if (!chosen.has(Number(row.id.slice(6)))) row.style.display = 'none'; });
-      panel.querySelector('[data-play="match"]')?.setAttribute('hidden', '');
+      const fullGame = panel.querySelector('[data-play="match"]');
+      if (fullGame) fullGame.style.display = 'none';
       const note = document.createElement('p'); note.className = 'key';
       note.textContent = chosen.size + ' selected clips · Scores and stats describe the full game.';
       panel.querySelector('#sheet')?.before(note);
