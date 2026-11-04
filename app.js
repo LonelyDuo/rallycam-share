@@ -51,6 +51,16 @@ export function renderIncomplete() {
   return `<main class="page"><section class="message" role="alert"><h1>RallyCam</h1><p>${esc(INCOMPLETE)}</p></section></main>`;
 }
 
+export function renderAnalysisSummary(state, analysis) {
+  if (!state.points.length) return '';
+  const names = ['left', 'right'].map(side => esc(teamName(side, state.setup)));
+  return `<section id="analysis-summary" style="background:var(--card);border:1px solid var(--line,#293b4d);border-radius:18px;padding:18px;margin-top:18px">`
+    + `<p class="eyebrow">GAME REVIEW</p><h2 style="margin:8px 0">The game at a glance</h2>`
+    + `<p>Longest scoring runs: ${names[0]} <b>${analysis.longestRun.left}</b> · ${names[1]} <b>${analysis.longestRun.right}</b>.</p>`
+    + `<p>Won on serve: ${names[0]} <b>${analysis.wonOnServePercent.left === null ? '—' : analysis.wonOnServePercent.left + '%'}</b> · ${names[1]} <b>${analysis.wonOnServePercent.right === null ? '—' : analysis.wonOnServePercent.right + '%'}</b>.</p>`
+    + `<p class="key">Statistics describe the full recorded game, including when only selected clips are shared. Ball tracking and contacts are estimates.</p></section>`;
+}
+
 export function renderMatch(payload, { embedded = false } = {}) {
   const state = stateFromShare(payload);
   const analysis = analyse(state);
@@ -68,6 +78,7 @@ export function renderMatch(payload, { embedded = false } = {}) {
     hasVideo ? renderWatch(vid, windows.match) : `<p class="novideo">${esc(NO_VIDEO)}</p>`,
   ];
 
+  parts.push(renderAnalysisSummary(state, analysis));
   parts.push(`<h2 class="sec">How it went</h2>`, renderChart(state, analysis));
   if (state.points.length) {
     parts.push(`<h2 class="sec">Stats</h2>`, renderTiles(state, analysis));
@@ -349,6 +360,7 @@ async function boot() {
     dispose = wire(collection ? root.querySelector('#collection-match') : root, validVideoID(match.vid));
   }
   show();
+  if (new URLSearchParams(location.search).get('view') === 'analysis') root.querySelector('#analysis-summary')?.scrollIntoView({block:'start'});
   if (collection) {
     root.addEventListener('click', (event) => {
       const player = event.target.closest?.('[data-stat-player]');
