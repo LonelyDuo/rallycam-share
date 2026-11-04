@@ -1,3 +1,4 @@
+import './tracking-player.js?v=tracking-1';
 // The share page: rebuilds a match from the link's fragment and shows it like the app's
 // match page. `renderMatch` is a pure payload -> HTML string function (so it is tested
 // without a DOM); everything below `boot` touches the page.
@@ -163,6 +164,7 @@ function renderWatch(vid, window) {
     + `<button class="btn" type="button" data-play="match" data-start="${start}" data-end="${end}">▶ Watch match</button>`
     + `<a class="ytlink" href="https://youtu.be/${esc(vid)}?t=${Math.floor(start)}" target="_blank" rel="noopener noreferrer">Open on YouTube</a>`
     + `<div class="player-wrap" id="player-wrap" hidden><div class="frame" id="player-frame"></div>`
+    + `<div id="tracking-controls" style="font-size:13px;padding:8px 0"></div>`
     + `<p class="note" id="player-note" role="status" hidden></p></div></section>`;
 }
 
@@ -360,6 +362,7 @@ function wire(root, vid) {
   let pending = null;
   let activeRow = null;
   let disposed = false;
+  let tracking = null;
 
   function showNote(text) {
     note.textContent = text;
@@ -390,6 +393,7 @@ function wire(root, vid) {
         events: {
           onReady: () => {
             playerReady = true;
+            tracking = new window.RallyCamSharedTracking({videoID:vid,player,container:frameHolder,controls:root.querySelector("#tracking-controls")});
             if (pending) { load(pending); pending = null; }
           },
           onError: () => showNote(PLAYER_ERROR),
@@ -411,7 +415,7 @@ function wire(root, vid) {
     activeRow?.classList.remove('playing');
     activeRow = el.classList.contains('row') ? el : null;
     activeRow?.classList.add('playing');
-    if (!frameHolder.firstChild) create(start, end);
+    if (!frameHolder.querySelector('iframe')) create(start, end);
     else if (playerReady) load([start, end]);
     else pending = [start, end];
     wrap.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -426,7 +430,7 @@ function wire(root, vid) {
     const el = e.target.closest?.('.row[data-play]');
     if (el) { e.preventDefault(); play(el); }
   });
-  return () => { disposed = true; player?.destroy?.(); };
+  return () => { disposed = true; tracking?.dispose(); player?.destroy?.(); };
 }
 
 /// Resolves with `YT` once the IFrame API is ready. The only script this page loads.
