@@ -282,6 +282,23 @@ function renderRow(p, state, analysis, video, hl) {
     + `<span class="n">${p.number}</span>${cell('left')}${cell('right')}<span class="act">${act}</span></div>`;
 }
 
+// Selected clip links preserve the complete score but show only chosen replay rows.
+export function selectedClips(search, matchCount, pointCount) {
+  const raw = new URLSearchParams(search).get('clips');
+  if (!raw || raw.length > 12000) return null;
+  const result = new Map(); let total = 0;
+  for (const entry of raw.split(';')) {
+    if (!/^\d+:\d+(,\d+)*$/.test(entry)) return null;
+    const [key, list] = entry.split(':'), index = Number(key) - 1;
+    if (!Number.isSafeInteger(index) || index < 0 || index >= matchCount || result.has(index)) return null;
+    const points = [...new Set(list.split(',').map(Number))];
+    if (points.some(n => !Number.isSafeInteger(n) || n < 1 || n > pointCount(index))) return null;
+    total += points.length; if (total > 500) return null;
+    result.set(index, new Set(points));
+  }
+  return result;
+}
+
 // MARK: Page
 
 export const SHARE_STORAGE = 'https://rallycam-share-storage.richardisbluehd.chatgpt.site';
@@ -310,6 +327,7 @@ async function boot() {
     root.querySelector('#retry-share')?.addEventListener('click', () => location.reload());
     return;
   }
+  const clipSelection = selectedClips(location.search, collection ? payload.m.length : 1, index => (collection ? payload.m[index] : payload).p.length);
   let dispose;
   let selectedStatsPlayer = null;
   function show(index = 0) {
@@ -317,6 +335,16 @@ async function boot() {
     root.innerHTML = collection ? renderCollection(payload, index, selectedStatsPlayer) : renderMatch(payload);
     const match = collection ? payload.m[index] : payload;
     document.title = `${payload.t} · RallyCam`;
+    const chosen = clipSelection?.get(index);
+    if (chosen) {
+      const panel = collection ? root.querySelector('#collection-match') : root;
+      panel.querySelectorAll('.row[id^="point-"]').forEach(row => { if (!chosen.has(Number(row.id.slice(6)))) row.style.display = 'none'; });
+      panel.querySelector('[data-play="match"]')?.setAttribute('hidden', '');
+      const note = document.createElement('p'); note.className = 'key';
+      note.textContent = chosen.size + ' selected clips · Scores and stats describe the full game.';
+      panel.querySelector('#sheet')?.before(note);
+    }
+
     dispose = wire(collection ? root.querySelector('#collection-match') : root, validVideoID(match.vid));
   }
   show();
