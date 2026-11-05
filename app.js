@@ -1,3 +1,5 @@
+import {renderMatchups,matchIndices} from './matchup-ui.js?v=day-ui-1';
+import {ReplayControls} from './replay-controls.js?v=day-ui-1';
 import './tracking-player.js?v=tracking-1';
 // The share page: rebuilds a match from the link's fragment and shows it like the app's
 // match page. `renderMatch` is a pure payload -> HTML string function (so it is tested
@@ -9,8 +11,8 @@ import {
   collectionStats, collectionOpponents,
 } from './rules.js?v=collection-stats-6';
 
-const LEFT = '#FFD23F';
-const RIGHT = '#5AA9FF';
+const LEFT = '#68E8CD';
+const RIGHT = '#B9A0FF';
 const NO_VIDEO = 'No video for this match — stats only.';
 export const PLAYER_ERROR = 'Clips play once YouTube has processed the stream — try again later.';
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -110,8 +112,8 @@ export function renderCollectionStats(payload, selectedKey = null) {
     + `${opponent.unfinished ? ` · ${opponent.unfinished} undecided` : ''}</span>`
     + `<span>${opponent.hasDoubles ? 'Team points' : 'Points'} ${opponent.pointsFor}–${opponent.pointsAgainst}</span></div></article>`
   ).join('') : '';
-  return `<section class="collection-stats" id="collection-stats" aria-label="Selected match statistics"><details open>`
-    + `<summary><span>Collection stats</span><span>${stats.total} games · ${stats.earlyEnded} ended early <span class="picker-chevron" aria-hidden="true">⌄</span></span></summary>`
+  return `<section class="collection-stats" id="collection-stats" aria-label="Selected match statistics"><details>`
+    + `<summary><span>Player stats</span><span>${stats.total} games · ${stats.earlyEnded} ended early <span class="picker-chevron" aria-hidden="true">⌄</span></span></summary>`
     + `<div class="collection-stats-body"><p class="stats-scope">Only the games in this collection</p>`
     + (stats.players.length ? `<div class="record-heading"><span>Player · tap to compare</span><span>W–L</span><span>Win rate</span></div>`
       + `<div class="record-list">${records}</div><h3>${esc(selected.name)} <span>head-to-head</span></h3>`
@@ -132,7 +134,7 @@ export function renderCollection(payload, index = 0, selectedPlayer = null) {
     const selected = index === i;
     const label = `Match ${i + 1}, ${teamName('left', state.setup)} ${state.score.left}–${state.score.right} ${teamName('right', state.setup)}`;
     return `<button class="picker-choice${selected ? ' is-selected' : ''}" type="button" data-browse="${i}"`
-      + `${selected ? ' aria-current="true"' : ''} aria-label="${esc(label)}">`
+      + ` aria-label="${esc(label)}">`
       + `<span class="picker-number">${selected ? '✓' : i + 1}</span><span class="picker-choice-content">`
       + `<span class="picker-choice-meta">Match ${i + 1} · ${esc(prettyDate(match.d))}<span>${selected ? 'Selected' : validVideoID(match.vid) ? 'Video' : 'Stats only'}</span></span>`
       + `<span class="picker-teams">${matchRows(match)}</span></span></button>`;
@@ -140,6 +142,7 @@ export function renderCollection(payload, index = 0, selectedPlayer = null) {
   return `<main class="collection"><header class="collection-top"><p class="eyebrow">RallyCam · Match collection</p>`
     + `<h1>${esc(payload.t)}</h1><p class="collection-count">${payload.m.length} match${payload.m.length === 1 ? '' : 'es'} · one link</p></header>`
     + renderCollectionStats(payload, selectedPlayer)
+    + renderMatchups(payload, index)
     + `<nav class="collection-nav" aria-label="Browse matches"><details class="match-picker" id="match-picker">`
     + `<summary><span class="picker-current"><span class="picker-current-meta"><span>Match ${index + 1} of ${payload.m.length}</span>`
     + `<span class="picker-change">Change match <span class="picker-chevron" aria-hidden="true">⌄</span></span></span>`
@@ -339,12 +342,21 @@ async function boot() {
     return;
   }
   const clipSelection = selectedClips(location.search, collection ? payload.m.length : 1, index => (collection ? payload.m[index] : payload).p.length);
+  let currentIndex = 0;
   let dispose;
   let selectedStatsPlayer = null;
+  let collectionFormat = 'all', collectionQuery = '';
   function show(index = 0) {
     dispose?.();
+    currentIndex=index;
     root.innerHTML = collection ? renderCollection(payload, index, selectedStatsPlayer) : renderMatch(payload);
     const match = collection ? payload.m[index] : payload;
+    if(collection){
+      root.querySelector('#day-library').outerHTML=renderMatchups(payload,index,collectionFormat,collectionQuery);
+      const filtered={...payload,m:matchIndices(payload,collectionFormat).map(i=>payload.m[i])};
+      root.querySelector('#collection-stats').outerHTML=renderCollectionStats(filtered,selectedStatsPlayer);
+    }
+
     document.title = `${payload.t} · RallyCam`;
     const chosen = clipSelection?.get(index);
     if (chosen) {
@@ -357,16 +369,26 @@ async function boot() {
       panel.querySelector('#sheet')?.before(note);
     }
 
-    dispose = wire(collection ? root.querySelector('#collection-match') : root, validVideoID(match.vid));
+    dispose = wire(collection ? root.querySelector('#collection-match') : root, validVideoID(match.vid), match);
   }
   show();
   if (new URLSearchParams(location.search).get('view') === 'analysis') root.querySelector('#analysis-summary')?.scrollIntoView({block:'start'});
   if (collection) {
+    root.addEventListener('input',event=>{
+      if(event.target.id!=='day-player-search')return;
+      collectionQuery=event.target.value;
+      const template=document.createElement('template');template.innerHTML=renderMatchups(payload,currentIndex,collectionFormat,collectionQuery);
+      root.querySelector('#day-matchups-list').replaceChildren(...template.content.querySelector('#day-matchups-list').childNodes);
+      root.querySelector('#day-game-count').textContent=template.content.querySelector('#day-game-count').textContent;
+    });
     root.addEventListener('click', (event) => {
+      const format=event.target.closest?.('[data-day-format]');
+      if(format){collectionFormat=format.dataset.dayFormat;const allowed=matchIndices(payload,collectionFormat,collectionQuery);show(allowed.includes(currentIndex)?currentIndex:allowed[0]??currentIndex);root.querySelector('[data-day-format="'+collectionFormat+'"]')?.focus({preventScroll:true});return;}
+
       const player = event.target.closest?.('[data-stat-player]');
       if (player) {
         selectedStatsPlayer = player.dataset.statPlayer;
-        root.querySelector('#collection-stats').outerHTML = renderCollectionStats(payload, selectedStatsPlayer);
+        root.querySelector('#collection-stats').outerHTML = renderCollectionStats({...payload,m:matchIndices(payload,collectionFormat).map(i=>payload.m[i])}, selectedStatsPlayer);
         Array.from(root.querySelectorAll('[data-stat-player]')).find(button => button.dataset.statPlayer === selectedStatsPlayer)?.focus({ preventScroll: true });
         return;
       }
@@ -378,7 +400,7 @@ async function boot() {
           show(Number(button.dataset.browse));
           window.scrollTo({ top: 0, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
         }
-        root.querySelector('#match-picker summary').focus({ preventScroll: true });
+        root.querySelector('[data-matchup-index="'+currentIndex+'"]')?.focus({ preventScroll: true });
       }
     });
   }
@@ -386,7 +408,7 @@ async function boot() {
   window.addEventListener('hashchange', () => location.reload());
 }
 
-function wire(root, vid) {
+function wire(root, vid, match) {
   const sheet = root.querySelector('#sheet');
   const toggle = root.querySelector('[data-toggle="hl"]');
   toggle?.addEventListener('click', () => {
@@ -404,6 +426,7 @@ function wire(root, vid) {
   let activeRow = null;
   let disposed = false;
   let tracking = null;
+  let replayControls = null, activeWindow = null;
 
   function showNote(text) {
     note.textContent = text;
@@ -412,7 +435,7 @@ function wire(root, vid) {
 
   function embedURL(start, end) {
     const q = new URLSearchParams({
-      enablejsapi: '1', playsinline: '1', autoplay: '1', rel: '0', modestbranding: '1',
+      enablejsapi: '1', playsinline: '1', autoplay: '1', rel: '0', controls: '0', fs: '0',
       start: String(Math.floor(start)), end: String(Math.ceil(end)),
       origin: location.origin,
     });
@@ -435,6 +458,9 @@ function wire(root, vid) {
           onReady: () => {
             playerReady = true;
             tracking = new window.RallyCamSharedTracking({videoID:vid,player,container:frameHolder,controls:root.querySelector("#tracking-controls")});
+            replayControls=new ReplayControls({player,stage:frameHolder,match,points:[...root.querySelectorAll('.row[data-play]')].filter(el=>el.style.display!=='none'),choose:play,tracking:()=>tracking});
+            if(activeWindow)replayControls.setWindow(...activeWindow);
+
             if (pending) { load(pending); pending = null; }
           },
           onError: () => showNote(PLAYER_ERROR),
@@ -451,6 +477,8 @@ function wire(root, vid) {
     const start = Number(el.dataset.start);
     const end = Number(el.dataset.end);
     if (!Number.isFinite(start) || !Number.isFinite(end)) return;
+    activeWindow=[start,end,el];
+    replayControls?.setWindow(start,end,el);
     wrap.hidden = false;
     showNote('');
     activeRow?.classList.remove('playing');
@@ -471,7 +499,7 @@ function wire(root, vid) {
     const el = e.target.closest?.('.row[data-play]');
     if (el) { e.preventDefault(); play(el); }
   });
-  return () => { disposed = true; tracking?.dispose(); player?.destroy?.(); };
+  return () => { disposed = true; replayControls?.dispose(); tracking?.dispose(); player?.destroy?.(); };
 }
 
 /// Resolves with `YT` once the IFrame API is ready. The only script this page loads.
