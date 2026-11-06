@@ -293,7 +293,23 @@ function renderRow(p, state, analysis, video, hl) {
     if (!p.isStarred) act = '<span class="pl">▶</span>';
   }
   return `<div class="row${hl}" id="point-${p.number}"${attrs} aria-label="${esc(label)}">`
-    + `<span class="n">${p.number}</span>${cell('left')}${cell('right')}<span class="act">${act}</span></div>`;
+    + `<span class="n">${p.number}</span>${cell('left')}${cell('right')}<span class="act">${act}<button type="button" class="share-point" data-share-point="${p.number}" aria-label="Share point ${p.number}">Share</button></span></div>`;
+}
+
+// Point links retain the collection reference (including legacy fragment payloads).
+export function pointShareURL(address, matchIndex, pointNumber) {
+  const url = new URL(address);
+  url.searchParams.set('match', String(matchIndex + 1));
+  url.searchParams.set('point', String(pointNumber));
+  return url.href;
+}
+
+export function selectedPoint(search, matchCount, pointCount) {
+  const params = new URLSearchParams(search);
+  const match = Number(params.get('match') ?? 1) - 1;
+  const index = Number.isInteger(match) && match >= 0 && match < matchCount ? match : 0;
+  const point = Number(params.get('point'));
+  return { index, point: Number.isInteger(point) && point > 0 && point <= pointCount(index) ? point : null };
 }
 
 // Selected clip links preserve the complete score but show only chosen replay rows.
@@ -341,14 +357,16 @@ async function boot() {
     root.querySelector('#retry-share')?.addEventListener('click', () => location.reload());
     return;
   }
+  const selection = selectedPoint(location.search, collection ? payload.m.length : 1,
+    index => (collection ? payload.m[index] : payload).p.length);
+  let currentIndex = selection.index;
   const clipSelection = selectedClips(location.search, collection ? payload.m.length : 1, index => (collection ? payload.m[index] : payload).p.length);
-  let currentIndex = 0;
   let dispose;
   let selectedStatsPlayer = null;
   let collectionFormat = 'all', collectionQuery = '';
   function show(index = 0) {
     dispose?.();
-    currentIndex=index;
+    currentIndex = index;
     root.innerHTML = collection ? renderCollection(payload, index, selectedStatsPlayer) : renderMatch(payload);
     const match = collection ? payload.m[index] : payload;
     if(collection){
@@ -371,8 +389,26 @@ async function boot() {
 
     dispose = wire(collection ? root.querySelector('#collection-match') : root, validVideoID(match.vid), match);
   }
-  show();
+  show(selection.index);
   if (new URLSearchParams(location.search).get('view') === 'analysis') root.querySelector('#analysis-summary')?.scrollIntoView({block:'start'});
+  if (selection.point) {
+    const row = root.querySelector(`#point-${selection.point}`);
+    row?.classList.add('selected-point');
+    row?.scrollIntoView({ block: 'center' });
+  }
+  root.addEventListener('click', async event => {
+    const button = event.target.closest?.('[data-share-point]');
+    if (!button) return;
+    const url = pointShareURL(location.href, currentIndex, Number(button.dataset.sharePoint));
+    try {
+      if (navigator.share) await navigator.share({ title: `${payload.t} · Point ${button.dataset.sharePoint}`, url });
+      else { await navigator.clipboard.writeText(url); button.textContent = 'Copied'; }
+    } catch (error) {
+      if (error.name !== 'AbortError') {
+        window.prompt('Copy point link', url);
+      }
+    }
+  });
   if (collection) {
     root.addEventListener('input',event=>{
       if(event.target.id!=='day-player-search')return;
@@ -491,10 +527,12 @@ function wire(root, vid, match) {
   }
 
   root.addEventListener('click', (e) => {
+    if (e.target.closest?.('[data-share-point]')) return;
     const el = e.target.closest?.('[data-play]');
     if (el) play(el);
   });
   root.addEventListener('keydown', (e) => {
+    if (e.target.closest?.('[data-share-point]')) return;
     if (e.key !== 'Enter' && e.key !== ' ') return;
     const el = e.target.closest?.('.row[data-play]');
     if (el) { e.preventDefault(); play(el); }
