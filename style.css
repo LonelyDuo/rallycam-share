@@ -229,3 +229,4 @@ main > .message { color: var(--dim); }
 .day-metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:0 0 20px}.day-metrics>div{display:grid;gap:4px}.day-metrics b{font-size:32px;font-variant-numeric:tabular-nums;letter-spacing:-1px}.day-metrics span{font-size:12px;color:var(--dim)}
 
 .frame:-webkit-full-screen{width:100vw;height:100vh;aspect-ratio:auto;border-radius:0}
+.frame.native-yt .replay-tap,.frame.native-yt .replay-chrome{display:none}.native-done{position:absolute;top:8px;left:8px;z-index:5;padding:6px 10px;border:1px solid #ffffff33;border-radius:16px;background:#000b;color:#fff;font-size:12px}
